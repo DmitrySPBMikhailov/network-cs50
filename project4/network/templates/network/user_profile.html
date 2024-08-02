@@ -1,0 +1,92 @@
+{% extends "network/layout.html" %}
+{% load static %}
+
+{% block body %}
+    <div class="row">
+        <div class="col">
+            {% if is_this_self_profile %}
+                <h3>My posts</h3>
+            {% else %}
+                <h3>{{ author.username }}'s posts</h3>
+            {% endif %}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <h5>Number of followers: <span>{{ author.have_followers_count }}</span></h5>
+        </div>
+    </div>
+    {% if not is_this_self_profile %}
+        <div class="row">
+            <div class="col">
+                {% if am_i_following %}
+                    <button class="btn btn-secondary" id="toggleBtn" value="unfollow" 
+                    data-parent="{{ parent.id }}" data-child="{{ author.id }}">Unfollow</button>
+                {% else %}
+                    <button class="btn btn-primary" id="toggleBtn" value="follow"
+                    data-parent="{{ parent.id }}" data-child="{{ author.id }}">Follow</button>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+    
+    {% include 'network/partials/posts_loop.html' %}
+
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+ }
+ 
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.querySelector("#toggleBtn");
+    btn.addEventListener("click", (e) => {
+    const csrftoken = getCookie('csrftoken');
+    fetch("/toggle-following", {
+        method: "POST",
+        headers: {
+            'Content-type': 'application/json',
+            'X-CSRFToken': csrftoken,
+        },
+        body: JSON.stringify({
+        action: e.target.value,
+        parent: e.target.dataset.parent,
+        child: e.target.dataset.child,
+        }),
+    })
+        .then((response) => response.json())
+        .then((result) => {
+        const span = document.querySelector('span');
+        if (result['message'] === 'followed') {
+            btn.value = "unfollow";
+            btn.innerHTML = "Unfollow";
+            btn.classList.remove("btn-primary");
+            btn.classList.add("btn-secondary");
+            btn.blur();
+            span.innerHTML = result['count'];
+        } else if (result['message'] === 'unfollowed') {
+            btn.value = "follow";
+            btn.innerHTML = "Follow";
+            btn.classList.remove("btn-secondary");
+            btn.classList.add("btn-primary");
+            btn.blur();
+            span.innerHTML = result['count'];
+        }
+        });
+    });
+})
+</script>
+
+{% endblock %}

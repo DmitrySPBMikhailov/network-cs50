@@ -1,0 +1,190 @@
+{% load extra_tags %}
+{% load static %}
+
+{% for post in page_obj %}
+    <div class="border p-3 mt-2" id="post-{{ post.id }}">
+        <div class="wrapper">
+            <div class="row">
+                <div class="col d-flex justify-content-start">
+                    <h4>{{ post.user_author }}</h4>
+                    <span style="width: 0.5rem"></span>
+                    {% if allow_to_watch_all %}
+                        <a href="{% url 'show_user_profile' post.user_author.pk %}" class="pt-1">Watch all posts</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% if user.is_authenticated and user == post.user_author %}
+                <div class="row">
+                    <div class="col">
+                        <a class="edit-btn btn btn-light btn-sm" data-post="{{ post.id }}"
+                        data-user="{{ post.user_author.id }}">edit</a>
+                    </div>
+                </div>
+            {% endif %}
+            <div class="row">
+                <div class="col myText">
+                    {{ post.text }}
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <span class="text-secondary">{{ post.dt }}</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col d-flex justify-content-start">
+                    
+                    {% if post|did_user_liked:user.id %}
+                        <img src="{% static '/network/images/red_heart.png' %}" alt="liked"
+                         class="my-img" data-post="{{ post.id }}" data-value="dislike"
+                         data-parent="{{ user.id }}">
+                    {% else %}
+                        <img src="{% static '/network/images/heart.png' %}" alt="not_liked" 
+                        class="my-img" data-post="{{ post.id }}" data-value="like"
+                        data-parent="{{ user.id }}">
+                    {% endif %}
+                    <span class="count-span">{{ post.likes_count }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+{% empty %}
+    <div>No posts...</div>
+{% endfor %}
+
+<div class="pagination">
+    <span class="step-links">
+        {% if page_obj.has_previous %}
+            <a href="?page=1">&laquo; first</a>
+            <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+        {% endif %}
+
+        <span class="current">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+        </span>
+
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}">next</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
+        {% endif %}
+    </span>
+</div>
+
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+   
+    const editBtns = document.querySelectorAll('.edit-btn');    
+    const submitForm = (editBtns) => {
+        editBtns.forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const csrftoken = getCookie('csrftoken');
+                const postID = btn.dataset.post;
+                const authorID = btn.dataset.user;
+                const divPost = document.querySelector(`#post-${postID}`);
+                const textDiv = document.querySelector(`#post-${postID} .myText`);
+                const text = document.querySelector(`#post-${postID} .myText`).innerHTML.trim();
+                const divPostWrapper = document.querySelector(`#post-${postID} .wrapper`);
+                divPostWrapper.style.display = 'none';
+
+                const element_form = document.createElement('form');
+                element_form.setAttribute('method', 'post');
+
+                const element_btn = document.createElement('button');
+                element_btn.setAttribute('type', 'submit');
+                element_btn.innerHTML = 'edit';
+                element_btn.classList.add("btn", "btn-primary");
+
+                const element_input = document.createElement('textarea');
+                element_input.value = text;
+                element_input.setAttribute('cols', 10);
+                element_input.setAttribute('rows', 2);
+                element_input.setAttribute('required', true);
+                element_input.classList.add("textarea", "form-control", "mb-3");
+
+                element_form.insertAdjacentElement('afterbegin', element_input);
+                element_form.insertAdjacentElement('beforeend', element_btn);
+
+                divPost.insertAdjacentElement('afterbegin', element_form);
+
+                element_form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    fetch("/edit-post", {
+                        method: "POST",
+                        headers: {
+                            'Content-type': 'application/json',
+                            'X-CSRFToken': csrftoken,
+                        },
+                        body: JSON.stringify({
+                            id: postID,
+                            text: element_input.value,
+                            user_id: authorID
+                        }),
+                    })
+                    .then((response) => response.json())
+                    .then((result) => {
+                        if (result['message'] === 'saved') {
+                            textDiv.innerHTML = element_input.value;
+                            element_form.remove();
+                            divPostWrapper.style.display = 'block';
+                        }
+                    })
+                })
+                
+            })
+        })
+    }
+
+    if(editBtns) {
+        submitForm(editBtns);
+    }
+
+    const likeBtns = document.querySelectorAll('.my-img');
+    if (likeBtns) {
+        likeBtns.forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                const csrftoken = getCookie('csrftoken');
+                fetch("/toggle-likes", {
+                    method: 'POST',
+                    headers: {
+                        'Content-type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                    },
+                    body: JSON.stringify({
+                        action: e.target.dataset.value,
+                        parent: e.target.dataset.parent,
+                        post_id: e.target.dataset.post
+                    })
+                })
+                .then((response) => response.json())
+                .then((result) => {
+                    const postID = e.target.dataset.post;
+                    const span = document.querySelector(`#post-${postID} .count-span`);
+                    span.innerHTML = result['count'];
+                    if (result['message'] === 'liked') {
+                        btn.src = "{% static '/network/images/red_heart.png' %}";
+                        btn.setAttribute('data-value', "dislike");
+                    } else if (result['message'] === 'disliked') {
+                        btn.src = "{% static '/network/images/heart.png' %}";
+                        btn.setAttribute('data-value', "like");
+                    }
+                })
+            })
+        })
+    }
+
+</script>
